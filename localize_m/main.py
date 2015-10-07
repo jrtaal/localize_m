@@ -219,30 +219,56 @@ def parse(filename, infile, outfile,
       raise KeyboardInterrupt
 
 def main():
-   parser = argparse.ArgumentParser(description = "add Translation to .m files")
+   epilog = """Localize_m has two modes:
 
-   parser.add_argument('-p', '--path', type = str)
+1. Interactively parse your file, and ask for each string whether it
+   should be localized  ( `--ask-all` option). 
+
+2. Automatically parse your file and replace each `@"..."` string prefixed
+   with `__LOCALIZE` with a localized version. This mode can run in a fully
+   automated fashion or, when you use the `-c` option, `localize_m` will
+   ask you to edit the slug and to provide a comment for the translator.
+
+Localize_m inserts the following code for each `@"..."` string you
+choose to replace:
+
+NSLocalizedStringWithDefaultValue(<slug>,
+                                  kDefaultLocalizationTable, kClassBundle,
+                                  @"...", @"...")
+
+"""         
+
+   parser = argparse.ArgumentParser(description = "Localize_m helps with localizing your objc `.m` files",
+                                    epilog = epilog,
+                                    formatter_class = argparse.RawDescriptionHelpFormatter,
+                                    )
+
+   input_group = parser.add_argument_group("Input")
+
+   input_group.add_argument('-p', '--path', type = str, help = "localize all .m files in path")
    
-   parser.add_argument('infile', metavar = 'infile', nargs = '?',
+   input_group.add_argument('infile', metavar = 'infile', nargs = '?',
                        type=str,
                        help='Input .m file')
 
-   parser.add_argument('-o','--outfile', metavar = 'outfile', nargs = '?',
+   input_group.add_argument('-o','--outfile', metavar = 'outfile', nargs = '?',
                        type=str,
                        default=None,
                        help='Output file, otherwise stdout')
 
-   parser.add_argument("-a", "--ask-all", help = "ask for all strings (interactive))", default = False, action = "store_true")
+   input_group.add_argument("-a", "--ask-all", help = "ask for all strings (interactive))", default = False, action = "store_true")
 
-   parser.add_argument("-c", "--comments", help = "ask for comments and ids (interactive)", default = False, action = "store_true")
+   input_group.add_argument("-c", "--comments", help = "ask for comments and ids (interactive)", default = False, action = "store_true")
 
-   parser.add_argument("--inplace", help = "edit inplace", default = False, action = "store_true")
+   input_group.add_argument("--inplace", help = "localize file in-place", default = False, action = "store_true")
 
-   parser.add_argument("--table", type = str, help = "localizations table", default = DEFAULT_LOCALIZATIONSTABLE)
+   custom = parser.add_argument_group("Customization")
+   
+   custom.add_argument("--table", type = str, help = "custom localizations table argument", default = DEFAULT_LOCALIZATIONSTABLE)
 
-   parser.add_argument("--bundle", type = str, help = "NSBundle", default = DEFAULT_BUNDLE)
+   custom.add_argument("--bundle", type = str, help = "custom NSBundle argument", default = DEFAULT_BUNDLE)
 
-   parser.add_argument("--replace", type = str, help = "Auto localization prefix string", default = DEFAULT_AUTOREPLACE_PREFIX)
+   custom.add_argument("--replace", type = str, help = "Auto localization prefix string", default = DEFAULT_AUTOREPLACE_PREFIX)
    
    args = parser.parse_args()
 
@@ -285,8 +311,8 @@ def main():
 
          elif args.path: # implies inplace
             from io import StringIO
-            for fn in glob.glob(args.path):
-               intext = StringIO(open(fn,"r").read())
+            for fn in glob.glob(args.path + "/*.m"):
+               intext = StringIO(codecs.open(fn, encoding="utf-8",mode="r").read())
                outfile = open(fn, "w")
                parse(fn, intext, outfile, **config)
                
