@@ -1,13 +1,23 @@
 #!/usr/bin/env python
+from setuptools import setup
+#from distutils.core import setup
+import warnings
+import subprocess
 
-from distutils.core import setup
-
+try:
+   rst = subprocess.check_output("pandoc README.md -w rst".split())
+except:
+   warnings.warn("Could not convert markdown readme to RST")
+   rst = ""
+   raise
 setup(name='Localize_M',
-      version='1.0',
+      version='1.0.1',
       description='Localize objc M files',
-      author='Greg Ward',
+      long_description=open("README.rst").read(),
+      author='Jacco Taal',
       author_email='jacco@bitnomica.com',
-      url='https://gitlab.bitnomica.com/localize_m',
+      url='https://github.com/jrtaal/localize_m',
+      license="LICENSE.txt",
       packages=['localize_m'],
       classifiers = [
         'Development Status :: 4 - Beta',

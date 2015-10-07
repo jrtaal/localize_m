@@ -47,20 +47,20 @@ localize_m [-h] [-p PATH] [-o [outfile]] [-a] [-c] [--inplace]
            [--table TABLE] [--bundle BUNDLE] [--replace REPLACE]
            [infile]
 
-positional arguments:
+Input:
+  -p PATH, --path PATH  localize all .m files in path
   infile                Input .m file
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -p PATH, --path PATH
   -o [outfile], --outfile [outfile]
                         Output file, otherwise stdout
   -a, --ask-all         ask for all strings (interactive))
   -c, --comments        ask for comments and ids (interactive)
-  --inplace             edit inplace
-  --table TABLE         localizations table
-  --bundle BUNDLE       NSBundle
+  --inplace             localize file in-place
+
+Customization:
+  --table TABLE         custom localizations table argument
+  --bundle BUNDLE       custom NSBundle argument
   --replace REPLACE     Auto localization prefix string
+  
 ```
 
 ## Installation
