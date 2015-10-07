@@ -9,25 +9,20 @@ import tokenize
 import colored
 import glob
 import shutil
-
+import codecs
 
 TEMPLATE =\
 """
-NSLocalizedStringWithDefaultValue(@"{}",
-  kDefaultLocalizationsTable, kClassBundle,
-  @"{}",
-  @"{}"
+NSLocalizedStringWithDefaultValue(@"{slug}",
+  {table}, {bundle},
+  @"{value}",
+  @"{comment}"
 )"""
 
-AUTOPREFIX = "__LOCALIZE"
-
-class NoMatchException(Exception):
-   pass
-
-class ReplaceAction(Exception):
-   pass
-
-REPLACE = "[]"
+DEFAULT_AUTOREPLACE_PREFIX = "__LOCALIZE"
+DEFAULT_SLUG_FORMATTING_ARGUMENT_REPLACE = "[]"
+DEFAULT_LOCALIZATIONSTABLE = "kDefaultLocalizationsTable"
+DEFAULT_BUNDLE = "kClassBundle"
 
 slugify.ALLOWED_CHARS_PATTERN = re.compile(r'[^-a-z0-9[]]+')
 
@@ -50,20 +45,38 @@ def context_buf_readlines(infile, A=10, B=6):
       linenum += 1
       prebuf = prebuf[-A:] + postbuf[0:1]
       postbuf = postbuf[1:]
-         
 
-def parse(filename, infile, outfile, ask_all = True, comments = False, inplace = False):
+class NoMatchException(Exception):
+   pass
+
+class ReplaceAction(Exception):
+   pass
+
+default_config = dict(table = DEFAULT_LOCALIZATIONSTABLE,
+                      bundle = DEFAULT_BUNDLE,
+                      autoreplace_prefix = DEFAULT_AUTOREPLACE_PREFIX,
+                      ask_all = False,
+                      comments = False)
+
+def parse(filename, infile, outfile, 
+          ask_all = False,
+          comments = False,
+          table = DEFAULT_LOCALIZATIONSTABLE,
+          bundle = DEFAULT_BUNDLE,
+          autoreplace_prefix = DEFAULT_AUTOREPLACE_PREFIX):
+
    interactive = ask_all or comments
       
    string_re = re.compile(r'(.*?)@"([^"]+)"(.*)')
    prefix_re = re.compile(r"NSLocalized[a-zA-Z]String\(");
    fmt_re = re.compile(r"%[-0-9\.]*[l]?[difes\@]")
 
-   def slug_from_string(sel, REPLACE = REPLACE):
+   def slug_from_string(sel):
       items = fmt_re.split(sel)
       newitems = map(lambda item:slugify.slugify(item), items)
-      
-      slug =  "-[]-".join(filter(lambda x:len(x), newitems))
+
+      delimiter = "-"+DEFAULT_SLUG_FORMATTING_ARGUMENT_REPLACE +"-"
+      slug =  delimiter.join(filter(lambda x:len(x), newitems))
       return slug
    
 
@@ -109,8 +122,8 @@ def parse(filename, infile, outfile, ask_all = True, comments = False, inplace =
             raise NoMatchException
          
          try:
-            if replace_autoprefix and prefix.endswith(AUTOPREFIX):
-               prefix = prefix[:-len(AUTOPREFIX)]
+            if replace_autoprefix and prefix.endswith(autoreplace_prefix):
+               prefix = prefix[:-len(autoreplace_prefix)]
                raise ReplaceAction
                
             if ask_all:
@@ -171,7 +184,7 @@ def parse(filename, infile, outfile, ask_all = True, comments = False, inplace =
                raise
             else:
 
-               rep = TEMPLATE.format(slug, sel, cmt )
+               rep = TEMPLATE.format(slug=slug, value = sel, comment = cmt, bundle = bundle, table = table )
                if comments or interactive:
                   w( "".join(prebuf[-3:] +
                              [
@@ -211,11 +224,11 @@ def main():
    parser.add_argument('-p', '--path', type = str)
    
    parser.add_argument('infile', metavar = 'infile', nargs = '?',
-                       type=argparse.FileType('r'),
+                       type=str,
                        help='Input .m file')
 
    parser.add_argument('-o','--outfile', metavar = 'outfile', nargs = '?',
-                       type=argparse.FileType('w'),
+                       type=str,
                        default=None,
                        help='Output file, otherwise stdout')
 
@@ -224,6 +237,12 @@ def main():
    parser.add_argument("-c", "--comments", help = "ask for comments and ids (interactive)", default = False, action = "store_true")
 
    parser.add_argument("--inplace", help = "edit inplace", default = False, action = "store_true")
+
+   parser.add_argument("--table", type = str, help = "localizations table", default = DEFAULT_LOCALIZATIONSTABLE)
+
+   parser.add_argument("--bundle", type = str, help = "NSBundle", default = DEFAULT_BUNDLE)
+
+   parser.add_argument("--replace", type = str, help = "Auto localization prefix string", default = DEFAULT_AUTOREPLACE_PREFIX)
    
    args = parser.parse_args()
 
@@ -233,34 +252,46 @@ def main():
 
    if args.ask_all:
       args.comments = True
-   
+
+   config = dict(table = args.table,
+                 bundle = args.bundle,
+                 autoreplace_prefix =  args.replace,
+                 ask_all = args.ask_all,
+                 comments = args.comments
+   )
+
    if args.inplace:
       
-      from cStringIO import StringIO
-      intext = StringIO(args.infile.read())
-      fn = args.infile.name;
+      from io import StringIO
+      fp = codecs.open(infile, "r", encoding = "utf-8")
+      inbuf = StringIO(fp.read())
+      fp.close()
+      
       args.infile.close()
-      outfile = open(fn, "w")
-      parse(fn, intext, outfile, args.ask_all, args.comments)
+      outfile = codec.open(infile, "w", encoding="utf-8")
+      parse(infile, inbuf, outfile, args.ask_all, args.comments)
       
    else:
-            
       try:
          if args.infile:
             if not args.outfile:
-               args.outfile = sys.stdout
-               if args.ask_all or not args.comments:
+               outbuf = sys.stdout
+               if args.ask_all or args.comments:
                   print "Output to stdout is only supported in non-interactive mode"
-                  sys.exit(0)
-            parse(args.infile.name, args.infile, args.outfile, args.ask_all, args.comments)
+                  return -1
+	    else:
+	       outbuf = codecs.open(args.outfile, "w", encoding="utf-8")
+            parse(args.infile, codecs.open(args.infile,"r", encoding="utf-8"), outbuf, **config)
 
          elif args.path: # implies inplace
-            from cStringIO import StringIO
+            from io import StringIO
             for fn in glob.glob(args.path):
                intext = StringIO(open(fn,"r").read())
                outfile = open(fn, "w")
-               parse(fn, intext, outfile, args.ask_all, args.comments)
+               parse(fn, intext, outfile, **config)
                
       except KeyboardInterrupt:
-         sys.exit(1)
+         return -1
          
+   return 0
+      
